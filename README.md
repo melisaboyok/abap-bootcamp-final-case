@@ -3,6 +3,7 @@
 Bu proje, SAP ABAP dilinde geliştirilmiş bir uçak kayıtları ve uçuş hareketleri otomasyonunu içermektedir.
 
 ## Proje İçeriği:
+###### Programın adı 'ZMB_FINAL_PROJECT'.
 
 1. **Z'li Tablolar:**
    - Proje içerisinde iki adet Z'li tablo bulunmaktadır.
