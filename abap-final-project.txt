@@ -1,0 +1,231 @@
+*&---------------------------------------------------------------------*
+*& Report ZMB_FINAL_PROJECT
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZMB_FINAL_PROJECT.
+
+TABLES: ZMB_HEADER_TABLE,
+        ZMB_ITEM_TABLE.
+
+DATA: lt_item TYPE TABLE OF ZMB_ITEM_TABLE WITH HEADER LINE,
+      lt_header TYPE TABLE OF ZMB_HEADER_TABLE WITH HEADER LINE,
+      ls_header TYPE ZMB_HEADER_TABLE ,
+      ls_item   TYPE ZMB_ITEM_TABLE,
+      gt_data   TYPE STANDARD TABLE OF ZMB_ST_001 WITH HEADER LINE,
+      gs_data   TYPE ZMB_ST_001,
+      gt_join   TYPE STANDARD TABLE OF ZMB_ST_002 WITH HEADER LINE,
+      gt_fcat   TYPE lvc_t_fcat,
+      gs_fcat   TYPE lvc_s_fcat,
+      gs_layout TYPE lvc_s_layo,
+      lv_text   TYPE char50,
+      gv_active_tab TYPE string.
+
+SELECTION-SCREEN: BEGIN OF TABBED BLOCK tabl FOR 20 LINES.
+SELECTION-SCREEN: TAB (20) tab1 USER-COMMAND tab1 DEFAULT SCREEN 100,
+                  TAB (20) tab2 USER-COMMAND tab2 DEFAULT SCREEN 101.
+SELECTION-SCREEN: END OF BLOCK tabl.
+
+SELECTION-SCREEN: BEGIN OF SCREEN 100 AS SUBSCREEN.
+SELECT-OPTIONS: k1 for ZMB_HEADER_TABLE-AIRCRAFT_ID ,
+                k2 FOR ZMB_ITEM_TABLE-FLIGHT_ID.
+SELECTION-SCREEN: END OF SCREEN 100.
+
+
+SELECTION-SCREEN: BEGIN OF SCREEN 101 AS SUBSCREEN.
+PARAMETERS: p_fname TYPE localfile.
+SELECTION-SCREEN: END OF SCREEN 101.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+  PERFORM f4_fname.
+
+START-OF-SELECTION.
+
+**TAB1 EKRANININ İŞLEMLERİ
+  IF tabl-activetab = 'TAB1' AND k1[] IS NOT INITIAL AND k2[] IS NOT INITIAL.
+    SELECT * FROM ZMB_ITEM_TABLE AS t1 LEFT OUTER JOIN ZMB_HEADER_TABLE AS t2
+      ON t1~AIRCRAFT_ID = t2~AIRCRAFT_ID INTO CORRESPONDING FIELDS OF TABLE @gt_join.
+
+    CLEAR gs_layout.
+    CLEAR gt_fcat.
+
+    CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+      EXPORTING
+        i_structure_name = 'ZMB_ST_002'
+      CHANGING
+        ct_fieldcat      = gt_fcat.
+
+    CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+      EXPORTING
+        i_callback_program       = sy-repid
+        i_callback_pf_status_set = 'PF_STATUS_SET'
+        i_callback_user_command  = 'USER_COMMAND'
+        is_layout_lvc            = gs_layout
+        it_fieldcat_lvc          = gt_fcat
+        i_default                = 'X'
+        i_save                   = ' '
+      TABLES
+        t_outtab                 = gt_join.
+
+  ENDIF.
+*TAB2 EKRANININ İŞLEMLERİ
+  IF tabl-activetab = 'TAB2' AND p_fname IS NOT INITIAL.
+    PERFORM upload_data.
+  ENDIF.
+
+
+INITIALIZATION.
+  tab1 = 'TAB1'.
+  tab2 = 'TAB2'.
+
+
+
+AT SELECTION-SCREEN.
+  CASE sy-ucomm.
+    WHEN 'TAB1'.
+      MESSAGE 'TAB 1 clicked' TYPE 'S'.
+    WHEN 'TAB2'.
+      MESSAGE 'TAB 2 clicked' TYPE 'S'.
+    WHEN OTHERS.
+  ENDCASE.
+
+
+FORM f4_fname .
+  DATA: file_table TYPE filetable,
+        file_line TYPE file_table,
+        rc TYPE i.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    EXPORTING
+      default_extension       = 'xlsx'
+    CHANGING
+      file_table              = file_table
+      rc                      = rc
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3
+      not_supported_by_gui    = 4
+      OTHERS                  = 5.
+
+  READ TABLE file_table INTO file_line INDEX 1.
+  IF sy-subrc = 0.
+    p_fname = file_line-filename.
+  ENDIF.
+ENDFORM.
+
+FORM upload_data .
+   DATA: lt_file LIKE alsmex_tabline OCCURS 0 WITH HEADER LINE.
+
+
+
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+      filename                = p_fname
+      i_begin_col             = 1
+      i_begin_row             = 2
+      i_end_col               = 10
+      i_end_row               = 1000
+    TABLES
+      intern                  = lt_file
+    EXCEPTIONS
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
+
+   IF sy-subrc NE 0 OR lt_file[] IS INITIAL.
+    MESSAGE 'Dosya Okunamadı' TYPE 'I'.
+  ELSE.
+    REFRESH gt_data.
+       LOOP AT lt_file.
+
+      CASE lt_file-col.
+        WHEN 1.
+           MOVE lt_file-value to gt_data-AIRCRAFT_ID .
+        WHEN 2.
+          MOVE lt_file-VALUE to gt_data-AIRCRAFT_MODEL.
+        WHEN 3.
+          MOVE lt_file-value to gt_data-AIRCRAFT_NAME.
+        WHEN 4.
+        MOVE lt_file-VALUE to gt_data-MANUFACTURER.
+        WHEN 5.
+          MOVE lt_file-VALUE to  gt_data-FLIGHT_ID.
+        WHEN 6.
+        MOVE lt_file-value to gt_data-DEPARTURE_AIRPORT.
+        WHEN 7.
+        MOVE lt_file-value to gt_data-ARRIVAL_AIRPORT.
+        WHEN 8.
+        MOVE lt_file-VALUE to gt_data-TOTAL_PEOPLE .
+        WHEN 9.
+        MOVE lt_file-value to gt_data-TOTAL_DURATION.
+      ENDCASE.
+
+        AT END OF row.
+      APPEND gt_data.
+      CLEAR gt_data.
+        ENDAT.
+    ENDLOOP.
+
+  ENDIF.
+
+CALL FUNCTION 'LVC_FIELDCATALOG_MERGE'
+    EXPORTING
+      i_structure_name       = 'ZMB_ST_001'
+    CHANGING
+      ct_fieldcat            = gt_fcat
+    EXCEPTIONS
+      inconsistent_interface = 1
+      program_error          = 2
+      OTHERS                 = 3.
+
+   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      i_callback_program       = sy-repid
+      i_callback_pf_status_set = 'PF_STATUS_SET'
+      i_callback_user_command  = 'USER_COMMAND'
+      is_layout_lvc            = gs_layout
+      it_fieldcat_lvc          = gt_fcat
+      i_default                = 'X'
+      i_save                   = ' '
+    TABLES
+      t_outtab                 = gt_data.
+ENDFORM.
+
+FORM pf_status_set USING p_extab TYPE slis_t_extab.
+  SET PF-STATUS 'ZSTANDARD_FULLSCREEN'.
+ENDFORM.
+
+FORM USER_COMMAND USING r_ucomm LIKE sy-UCOMM
+                      RS_SELFIELD TYPE SLIS_SELFIELD.
+
+  CASE r_ucomm.
+    WHEN '&EKLE'.
+      PERFORM save_database.
+    WHEN '&TABLO1'.
+      CALL TRANSACTION 'ZMB_TC1'.
+    WHEN '&TABLO2'.
+      CALL TRANSACTION 'ZMB_TC2'.
+  ENDCASE.
+
+ENDFORM.
+
+FORM save_database.
+  IF sy-subrc EQ 0 AND gt_data[] IS NOT INITIAL.
+    LOOP AT gt_data INTO gs_data.
+      MOVE-CORRESPONDING gs_data TO ls_header.
+      APPEND ls_header TO lt_header.
+
+      MOVE-CORRESPONDING gs_data TO ls_item.
+      APPEND ls_item TO lt_item.
+    ENDLOOP.
+
+
+    MODIFY ZMB_HEADER_TABLE FROM TABLE lt_header[].
+    MODIFY ZMB_ITEM_TABLE FROM TABLE lt_item[].
+
+    MESSAGE 'Veriler eklendi!' TYPE 'S'. "
+  ELSE.
+
+    MESSAGE 'Excel dosyası boş veya veri içermiyor!' TYPE 'E'.
+  ENDIF.
+ENDFORM.
