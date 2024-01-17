@@ -1,6 +1,6 @@
-# Uçak Kayıtları ve Uçuş Hareketleri Otomasyonu - SAP ABAP Projesi
+# Uçak Kayıtları ve Uçuş Hareketleri - SAP ABAP Projesi
 
-Bu proje, SAP ABAP dilinde geliştirilmiş bir uçak kayıtları ve uçuş hareketleri otomasyonunu içermektedir.
+Bu proje, SAP ABAP dilinde geliştirilmiş bir uçak kayıtları ve uçuş hareketleri programını içermektedir.
 
 ## Proje İçeriği:
 ###### Programın adı 'ZMB_FINAL_PROJECT'.
